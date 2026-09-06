@@ -1,0 +1,10 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - com.eventhandling.HttpKt.configureHttp
+      - com.eventhandling.SerializationKt.configureSerialization
+      - com.eventhandling.ExposedKt.configureExposed
+      - com.eventhandling.PostgresKt.configurePostgres
+      - com.eventhandling.RoutingKt.configureRouting

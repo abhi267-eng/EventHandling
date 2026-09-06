@@ -1,0 +1,14 @@
+# Kotlin / Ktor
+backend/.gradle/
+backend/build/
+backend/h2.mv.db
+backend/h2.trace.db
+
+# React
+Website/node_modules/
+Website/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
