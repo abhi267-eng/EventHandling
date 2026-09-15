@@ -8,3 +8,7 @@ ktor:
       - com.eventhandling.ExposedKt.configureExposed
       - com.eventhandling.PostgresKt.configurePostgres
       - com.eventhandling.RoutingKt.configureRouting
+postgres:
+  url: jdbc:postgresql://localhost:5432/eventhandling
+  user: postgres
+  password: "$DATABASE_PASSWORD"
