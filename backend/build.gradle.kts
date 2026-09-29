@@ -23,9 +23,6 @@ dependencies {
     implementation(ktorLibs.server.cors)
     implementation(ktorLibs.server.netty)
     implementation(libs.exposed.core)
-    implementation(libs.exposed.r2dbc)
-    implementation(libs.h2database.h2)
-    implementation(libs.h2database.r2dbc)
     implementation(libs.logback.classic)
     implementation(libs.postgresql)
 
