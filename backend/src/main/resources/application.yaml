@@ -5,7 +5,6 @@ ktor:
     modules:
       - com.eventhandling.HttpKt.configureHttp
       - com.eventhandling.SerializationKt.configureSerialization
-      - com.eventhandling.ExposedKt.configureExposed
       - com.eventhandling.PostgresKt.configurePostgres
       - com.eventhandling.RoutingKt.configureRouting
 postgres:
