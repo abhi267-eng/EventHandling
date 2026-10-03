@@ -6,8 +6,19 @@ ktor:
       - com.eventhandling.HttpKt.configureHttp
       - com.eventhandling.SerializationKt.configureSerialization
       - com.eventhandling.PostgresKt.configurePostgres
+      - com.eventhandling.AuthenticationKt.configureAuthentication
       - com.eventhandling.RoutingKt.configureRouting
+
 postgres:
   url: jdbc:postgresql://localhost:5432/eventhandling
   user: postgres
   password: "$DATABASE_PASSWORD"
+
+jwt:
+  secret: "eventhandling-development-secret-change-later"
+  issuer: "eventhandling"
+  audience: "eventhandling-users"
+  expiration: 86400000
+
+setup:
+  platform-admin-secret: "eventhandling-first-admin-2026"

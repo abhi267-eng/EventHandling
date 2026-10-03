@@ -47,7 +47,21 @@ VALUES
 
 
 -- ============================================================
--- 3. EVENT CATEGORIES
+-- 3. ORGANIZATIONS / COUNCILS
+-- ============================================================
+
+INSERT INTO organizations
+    (college_id, organization_name, organization_type)
+VALUES
+    (1, 'Student Council', 'COUNCIL'),
+    (1, 'Cultural Council', 'COUNCIL'),
+    (1, 'Sports Council', 'COUNCIL'),
+    (1, 'NSS', 'SOCIAL'),
+    (1, 'Department Representative Team', 'REPRESENTATIVE_BODY');
+
+
+-- ============================================================
+-- 4. EVENT CATEGORIES
 -- ============================================================
 
 INSERT INTO event_categories

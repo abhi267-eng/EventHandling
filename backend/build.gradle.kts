@@ -22,9 +22,14 @@ dependencies {
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.cors)
     implementation(ktorLibs.server.netty)
+    implementation(ktorLibs.server.auth)
+    implementation(ktorLibs.server.auth.jwt)
+
     implementation(libs.exposed.core)
     implementation(libs.logback.classic)
     implementation(libs.postgresql)
+    implementation(libs.bcrypt)
+    implementation(libs.java.jwt)
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
