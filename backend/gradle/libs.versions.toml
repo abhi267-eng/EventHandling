@@ -5,6 +5,8 @@ h2-r2dbc = "1.1.0.RELEASE"
 kotlin = "2.4.0"
 logback = "1.5.37"
 postgresql = "42.7.13"
+bcrypt = "0.4"
+java-jwt = "4.5.0"
 
 [libraries]
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
@@ -13,6 +15,8 @@ h2database-h2 = { module = "com.h2database:h2", version.ref = "h2" }
 h2database-r2dbc = { module = "io.r2dbc:r2dbc-h2", version.ref = "h2-r2dbc" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+bcrypt = { module = "org.mindrot:jbcrypt", version.ref = "bcrypt" }
+java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
