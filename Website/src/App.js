@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -14,9 +15,14 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Landing />} />
+
+        <Route path="/login" element={<Login />} />
+
         <Route path="/signup" element={<Signup />} />
+
         <Route path="/verify-email" element={<VerifyEmail />} />
+
         <Route path="/home" element={<Home />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
