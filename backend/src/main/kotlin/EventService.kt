@@ -28,6 +28,7 @@ class EventService(private val connection: Connection) {
                 verification_status,
                 poster_url
             FROM events
+            WHERE status = 'APPROVED'
             ORDER BY start_datetime
         """.trimIndent()
 

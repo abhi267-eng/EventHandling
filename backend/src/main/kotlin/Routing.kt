@@ -302,7 +302,7 @@ fun Application.configureRouting() {
 
             val event = eventService.getEventById(eventId)
 
-            if (event == null) {
+            if (event == null || event.status != "APPROVED") {
                 call.respondText(
                     "Event not found",
                     status = io.ktor.http.HttpStatusCode.NotFound
@@ -346,7 +346,34 @@ fun Application.configureRouting() {
 
                 val request = call.receive<CreateEventRequest>()
 
-                val event = eventService.createEvent(request)
+                val userId = principal.payload.subject.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        "Invalid authentication token"
+                    )
+                    return@post
+                }
+
+                val collegeId =
+                    if (principal.hasRole("PLATFORM_ADMIN")) {
+                        request.collegeId
+                    } else {
+                        UserService(connection).getCollegeId(userId)
+                    }
+
+                if (collegeId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        "Your account is not linked to a college"
+                    )
+                    return@post
+                }
+
+                val event = eventService.createEvent(
+                    request.copy(createdBy = userId, collegeId = collegeId)
+                )
 
                 call.respond(
                     io.ktor.http.HttpStatusCode.Created,

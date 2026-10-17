@@ -25,6 +25,21 @@ class UserService(
         }
     }
 
+fun getCollegeId(userId: Long): Long? {
+    val sql = "SELECT college_id FROM users WHERE user_id = ?"
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setLong(1, userId)
+
+        statement.executeQuery().use { result ->
+            if (!result.next()) return null
+
+            val collegeId = result.getLong("college_id")
+            return if (result.wasNull()) null else collegeId
+        }
+    }
+}
+
 fun createNormalUser(request: SignupRequest): User {
     val passwordHash = PasswordHasher.hash(request.password)
 
