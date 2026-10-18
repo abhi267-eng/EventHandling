@@ -306,12 +306,39 @@ fun Application.configureRouting() {
                 return@get
             }
 
+            val nearLat = params["lat"]?.toDoubleOrNull()
+            val nearLng = params["lng"]?.toDoubleOrNull()
+            val radiusKm = params["radiusKm"]?.toDoubleOrNull()
+
+            if ((params["lat"] != null || params["lng"] != null) &&
+                (nearLat == null || nearLng == null ||
+                    nearLat !in -90.0..90.0 || nearLng !in -180.0..180.0)
+            ) {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "lat and lng must both be valid coordinates"
+                )
+                return@get
+            }
+
+            if (params["radiusKm"] != null &&
+                (radiusKm == null || radiusKm <= 0.0 || radiusKm > 20000.0)
+            ) {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "radiusKm must be a number between 0 and 20000"
+                )
+                return@get
+            }
+
             val viewerId = call.principal<JWTPrincipal>()
                 ?.payload?.subject?.toLongOrNull()
             val viewerCollegeId = viewerId?.let { UserService(connection).getCollegeId(it) }
 
             val events = eventService.getAllEvents(
-                collegeId, categoryId, city, from, to, viewerCollegeId
+                collegeId, categoryId, city, from, to, viewerCollegeId,
+                params["search"], params["sort"],
+                nearLat, nearLng, radiusKm
             )
             call.respond(events)
         }

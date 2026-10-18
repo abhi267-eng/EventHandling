@@ -10,7 +10,12 @@ class EventService(private val connection: Connection) {
         city: String? = null,
         fromDate: String? = null,
         toDate: String? = null,
-        viewerCollegeId: Long? = null
+        viewerCollegeId: Long? = null,
+        search: String? = null,
+        sort: String? = null,
+        nearLat: Double? = null,
+        nearLng: Double? = null,
+        radiusKm: Double? = null
     ): List<Event> {
         val extraConditions = StringBuilder()
         val values = mutableListOf<Any?>()
@@ -43,11 +48,47 @@ class EventService(private val connection: Connection) {
             )
             values.add(toDate)
         }
+                if (!search.isNullOrBlank()) {
+            extraConditions.append(" AND (title ILIKE ? OR description ILIKE ?)")
+            val pattern = "%" + search.trim() + "%"
+            values.add(pattern)
+            values.add(pattern)
+        }
+
         if (viewerCollegeId != null) {
             extraConditions.append(" AND (accept_visitors = TRUE OR college_id = ?)")
             values.add(viewerCollegeId)
         } else {
             extraConditions.append(" AND accept_visitors = TRUE")
+        }
+        val distanceSql = """
+            (6371 * acos(LEAST(1, GREATEST(-1,
+                cos(radians(?)) * cos(radians(CAST(latitude AS DOUBLE PRECISION))) *
+                cos(radians(CAST(longitude AS DOUBLE PRECISION)) - radians(?)) +
+                sin(radians(?)) * sin(radians(CAST(latitude AS DOUBLE PRECISION)))
+            ))))
+        """.trimIndent()
+
+        if (nearLat != null && nearLng != null) {
+            extraConditions.append(
+                " AND latitude IS NOT NULL AND longitude IS NOT NULL AND $distanceSql <= ?"
+            )
+            values.add(nearLat)
+            values.add(nearLng)
+            values.add(nearLat)
+            values.add(radiusKm ?: 25.0)
+        }
+
+        val orderBy = when {
+            sort == "distance" && nearLat != null && nearLng != null -> {
+                values.add(nearLat)
+                values.add(nearLng)
+                values.add(nearLat)
+                distanceSql
+            }
+            sort == "newest" -> "created_at DESC"
+            sort == "title" -> "title ASC"
+            else -> "start_datetime"
         }
         val events = mutableListOf<Event>()
 
@@ -74,7 +115,7 @@ class EventService(private val connection: Connection) {
             FROM events
             WHERE status = 'APPROVED'
             $extraConditions
-            ORDER BY start_datetime
+            ORDER BY $orderBy
         """.trimIndent()
 
         connection.prepareStatement(query).use { statement ->
