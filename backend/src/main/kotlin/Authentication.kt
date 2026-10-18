@@ -37,7 +37,7 @@ fun Application.configureAuthentication() {
         audience = audience,
         expirationTime = expirationTime
     )
-
+val userService = UserService(connectToPostgres(embedded = false))
     install(Authentication) {
 
         jwt("auth-jwt") {
@@ -54,17 +54,16 @@ fun Application.configureAuthentication() {
 
             validate { credential ->
 
-                val userId =
-                    credential.payload.subject
+    val userId = credential.payload.subject?.toLongOrNull()
 
-                if (userId != null) {
-                    JWTPrincipal(
-                        credential.payload
-                    )
-                } else {
-                    null
-                }
-            }
+    if (userId != null &&
+        userService.getAccountStatus(userId) == "ACTIVE"
+    ) {
+        JWTPrincipal(credential.payload)
+    } else {
+        null
+    }
+}
 
             challenge { _, _ ->
 

@@ -146,8 +146,10 @@ CREATE TABLE users (
     CONSTRAINT check_account_status
         CHECK (
             account_status IN (
-                'ACTIVE',
-                'SUSPENDED'
+				'ACTIVE',
+                'SUSPENDED',
+                'DELETED'
+            )
             )
         )
 );

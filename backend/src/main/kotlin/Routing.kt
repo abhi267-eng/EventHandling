@@ -13,6 +13,8 @@ fun Application.configureRouting() {
 
     val connection = connectToPostgres(embedded = false)
     val eventService = EventService(connection)
+    val adminService = AdminService(connection)
+    val adminQueueService = AdminQueueService(connection)
 
     routing {
 
@@ -343,6 +345,201 @@ fun Application.configureRouting() {
         // Protected event management
 
         authenticate("auth-jwt") {
+            get("/admin/applications/pending") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@get
+    }
+
+    val allowedRoles = setOf(
+        "PLATFORM_ADMIN",
+        "COLLEGE_ADMIN",
+        "FACULTY_COORDINATOR",
+        "EVENT_COORDINATOR"
+    )
+
+    if (actor.role !in allowedRoles) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to review applications")
+        return@get
+    }
+
+    call.respond(
+        adminQueueService.getPendingApplications(actor.role, actor.collegeId)
+    )
+}
+
+get("/admin/events/pending") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@get
+    }
+
+    val allowedRoles = setOf(
+        "PLATFORM_ADMIN",
+        "COLLEGE_ADMIN",
+        "FACULTY_COORDINATOR",
+        "EVENT_COORDINATOR"
+    )
+
+    if (actor.role !in allowedRoles) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to view pending events")
+        return@get
+    }
+
+    // Platform Admin may filter by college; everyone else sees only their own college
+    val collegeId = if (actor.role == "PLATFORM_ADMIN") {
+        call.request.queryParameters["collegeId"]?.toLongOrNull()
+    } else {
+        actor.collegeId
+    }
+
+    if (actor.role != "PLATFORM_ADMIN" && collegeId == null) {
+        call.respond(emptyList<PendingEvent>())
+        return@get
+    }
+
+    val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 20).coerceIn(1, 100)
+    val page = (call.request.queryParameters["page"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+
+    call.respond(
+        adminQueueService.getPendingEvents(collegeId, limit, (page - 1) * limit)
+    )
+}
+            get("/admin/users") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    if (!principal.hasAnyRole("PLATFORM_ADMIN", "COLLEGE_ADMIN")) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to view users")
+        return@get
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@get
+    }
+
+    // College Admins are always limited to their own college
+    val collegeId = if (actor.role == "COLLEGE_ADMIN") {
+        actor.collegeId
+    } else {
+        call.request.queryParameters["collegeId"]?.toLongOrNull()
+    }
+
+    val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 20).coerceIn(1, 100)
+    val page = (call.request.queryParameters["page"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+
+    val users = adminService.listUsers(
+        collegeId = collegeId,
+        role = call.request.queryParameters["role"],
+        status = call.request.queryParameters["status"],
+        search = call.request.queryParameters["search"]?.takeIf { it.isNotBlank() },
+        limit = limit,
+        offset = (page - 1) * limit
+    )
+
+    call.respond(users)
+}
+
+delete("/admin/users/{id}") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    if (!principal.hasAnyRole("PLATFORM_ADMIN", "COLLEGE_ADMIN")) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to delete users")
+        return@delete
+    }
+
+    val targetId = call.parameters["id"]?.toLongOrNull()
+
+    if (targetId == null) {
+        call.respond(HttpStatusCode.BadRequest, "Invalid user ID")
+        return@delete
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@delete
+    }
+
+    val target = adminService.getUserById(targetId)
+
+    if (target == null) {
+        call.respond(HttpStatusCode.NotFound, "User not found")
+        return@delete
+    }
+
+    if (target.accountStatus == "DELETED") {
+        call.respond(HttpStatusCode.Conflict, "User is already deleted")
+        return@delete
+    }
+
+    if (!canManage(actor, target)) {
+        call.respond(HttpStatusCode.Forbidden, "You cannot manage this user")
+        return@delete
+    }
+
+    adminService.softDeleteUser(targetId)
+
+    call.respondText("User deleted successfully")
+}
+
+for ((action, newStatus) in listOf("suspend" to "SUSPENDED", "reactivate" to "ACTIVE")) {
+
+    patch("/admin/users/{id}/$action") {
+
+        val principal = call.principal<JWTPrincipal>()!!
+
+        if (!principal.hasAnyRole("PLATFORM_ADMIN", "COLLEGE_ADMIN")) {
+            call.respond(HttpStatusCode.Forbidden, "You do not have permission to manage users")
+            return@patch
+        }
+
+        val targetId = call.parameters["id"]?.toLongOrNull()
+
+        if (targetId == null) {
+            call.respond(HttpStatusCode.BadRequest, "Invalid user ID")
+            return@patch
+        }
+
+        val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+        if (actor == null) {
+            call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+            return@patch
+        }
+
+        val target = adminService.getUserById(targetId)
+
+        if (target == null) {
+            call.respond(HttpStatusCode.NotFound, "User not found")
+            return@patch
+        }
+
+        if (!canManage(actor, target)) {
+            call.respond(HttpStatusCode.Forbidden, "You cannot manage this user")
+            return@patch
+        }
+
+        adminService.setAccountStatus(targetId, newStatus)
+
+        call.respondText("Account status set to $newStatus")
+    }
+}
 
             post("/events") {
 
