@@ -535,6 +535,54 @@ fun Application.configureRouting() {
                 )
             }
 
+            post("/events/{id}/submit") {
+
+                val principal = call.principal<JWTPrincipal>()
+
+                if (principal == null) {
+                    call.respond(
+                        HttpStatusCode.Unauthorized,
+                        "Authentication required"
+                    )
+                    return@post
+                }
+
+                val userId = principal.payload.subject.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (userId == null || eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid request")
+                    return@post
+                }
+
+                val event = eventService.getEventById(eventId)
+
+                if (event == null) {
+                    call.respond(HttpStatusCode.NotFound, "Event not found")
+                    return@post
+                }
+
+                if (event.createdBy != userId && !principal.hasRole("PLATFORM_ADMIN")) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "Only the event creator can submit this event"
+                    )
+                    return@post
+                }
+
+                if (event.status != "DRAFT" && event.status != "REJECTED") {
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        "Only draft or rejected events can be submitted"
+                    )
+                    return@post
+                }
+
+                eventService.updateStatus(eventId, "PENDING")
+
+                call.respond(HttpStatusCode.OK, "Event submitted for approval")
+            }
+            
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()

@@ -549,6 +549,20 @@ fun patchEvent(eventId: Long, request: PatchEventRequest): Event? {
         }
     }
 }
+fun updateStatus(eventId: Long, newStatus: String): Boolean {
+    val sql = """
+        UPDATE events
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ?
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setString(1, newStatus)
+        statement.setLong(2, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
 fun deleteEvent(eventId: Long): Boolean {
 
     val query = """
