@@ -283,6 +283,7 @@ fun Application.configureRouting() {
         }
         // Public event discovery
 
+        authenticate("auth-jwt", optional = true) {
         get("/events") {
             val params = call.request.queryParameters
 
@@ -303,8 +304,15 @@ fun Application.configureRouting() {
                 return@get
             }
 
-            val events = eventService.getAllEvents(collegeId, categoryId, city, from, to)
+            val viewerId = call.principal<JWTPrincipal>()
+                ?.payload?.subject?.toLongOrNull()
+            val viewerCollegeId = viewerId?.let { UserService(connection).getCollegeId(it) }
+
+            val events = eventService.getAllEvents(
+                collegeId, categoryId, city, from, to, viewerCollegeId
+            )
             call.respond(events)
+        }
         }
 
         get("/events/{id}") {

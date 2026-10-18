@@ -9,7 +9,8 @@ class EventService(private val connection: Connection) {
         categoryId: Long? = null,
         city: String? = null,
         fromDate: String? = null,
-        toDate: String? = null
+        toDate: String? = null,
+        viewerCollegeId: Long? = null
     ): List<Event> {
         val extraConditions = StringBuilder()
         val values = mutableListOf<Any?>()
@@ -41,6 +42,12 @@ class EventService(private val connection: Connection) {
                 " AND start_datetime < CAST(? AS TIMESTAMP) + INTERVAL '1 day'"
             )
             values.add(toDate)
+        }
+        if (viewerCollegeId != null) {
+            extraConditions.append(" AND (accept_visitors = TRUE OR college_id = ?)")
+            values.add(viewerCollegeId)
+        } else {
+            extraConditions.append(" AND accept_visitors = TRUE")
         }
         val events = mutableListOf<Event>()
 
