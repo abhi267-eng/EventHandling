@@ -420,7 +420,32 @@ fun Application.configureRouting() {
 
                 val request = call.receive<CreateEventRequest>()
 
-                val event = eventService.updateEvent(eventId, request)
+                                val userId = principal.payload.subject.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+                    return@put
+                }
+
+                val existing = eventService.getEventById(eventId)
+
+                if (existing == null) {
+                    call.respondText("Event not found", status = HttpStatusCode.NotFound)
+                    return@put
+                }
+
+                if (!canManageEvent(principal, userId, existing, UserService(connection))) {
+                    call.respond(HttpStatusCode.Forbidden, "You can only edit your own events")
+                    return@put
+                }
+
+                val event = eventService.updateEvent(
+                    eventId,
+                    request.copy(
+                        collegeId = existing.collegeId,
+                        createdBy = existing.createdBy
+                    )
+                )
 
                 if (event == null) {
                     call.respondText(
@@ -472,7 +497,29 @@ fun Application.configureRouting() {
 
                 val request = call.receive<PatchEventRequest>()
 
-                val event = eventService.patchEvent(eventId, request)
+                                val userId = principal.payload.subject.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+                    return@patch
+                }
+
+                val existing = eventService.getEventById(eventId)
+
+                if (existing == null) {
+                    call.respondText("Event not found", status = HttpStatusCode.NotFound)
+                    return@patch
+                }
+
+                if (!canManageEvent(principal, userId, existing, UserService(connection))) {
+                    call.respond(HttpStatusCode.Forbidden, "You can only edit your own events")
+                    return@patch
+                }
+
+                val event = eventService.patchEvent(
+                    eventId,
+                    request.copy(collegeId = null, createdBy = null)
+                )
 
                 if (event == null) {
                     call.respondText(
@@ -516,6 +563,25 @@ fun Application.configureRouting() {
                         "Invalid event ID",
                         status = io.ktor.http.HttpStatusCode.BadRequest
                     )
+                    return@delete
+                }
+
+                                val userId = principal.payload.subject.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+                    return@delete
+                }
+
+                val existing = eventService.getEventById(eventId)
+
+                if (existing == null) {
+                    call.respondText("Event not found", status = HttpStatusCode.NotFound)
+                    return@delete
+                }
+
+                if (!canManageEvent(principal, userId, existing, UserService(connection))) {
+                    call.respond(HttpStatusCode.Forbidden, "You can only delete events of your own college")
                     return@delete
                 }
 
@@ -588,7 +654,7 @@ fun Application.configureRouting() {
 
                 call.respond(HttpStatusCode.OK, "Event verified")
             }
-                        
+
             post("/events/{id}/review") {
 
                 val principal = call.principal<JWTPrincipal>()
