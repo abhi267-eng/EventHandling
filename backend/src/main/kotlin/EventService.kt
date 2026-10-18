@@ -550,6 +550,22 @@ fun patchEvent(eventId: Long, request: PatchEventRequest): Event? {
     }
 }
 
+fun markVerified(eventId: Long): Boolean {
+    val sql = """
+        UPDATE events
+        SET verification_status = 'VERIFIED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ?
+          AND status = 'APPROVED'
+          AND verification_status = 'UNVERIFIED'
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setLong(1, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
 fun reviewEvent(
     eventId: Long,
     newStatus: String,

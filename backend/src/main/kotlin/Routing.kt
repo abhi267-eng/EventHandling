@@ -534,7 +534,61 @@ fun Application.configureRouting() {
                     status = io.ktor.http.HttpStatusCode.OK
                 )
             }
-            
+
+            post("/events/{id}/verify") {
+
+                val principal = call.principal<JWTPrincipal>()
+
+                if (principal == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@post
+                }
+
+                val userId = principal.payload.subject.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (userId == null || eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid request")
+                    return@post
+                }
+
+                if (!principal.hasAnyRole("COLLEGE_ADMIN", "PLATFORM_ADMIN")) {
+                    call.respond(HttpStatusCode.Forbidden, "Only a college admin can verify events")
+                    return@post
+                }
+
+                val event = eventService.getEventById(eventId)
+
+                if (event == null) {
+                    call.respond(HttpStatusCode.NotFound, "Event not found")
+                    return@post
+                }
+
+                if (!principal.hasRole("PLATFORM_ADMIN") &&
+                    UserService(connection).getCollegeId(userId) != event.collegeId
+                ) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "You can only verify events of your own college"
+                    )
+                    return@post
+                }
+
+                if (event.status != "APPROVED") {
+                    call.respond(HttpStatusCode.Conflict, "Only approved events can be verified")
+                    return@post
+                }
+
+                if (event.verificationStatus == "VERIFIED") {
+                    call.respond(HttpStatusCode.Conflict, "Event is already verified")
+                    return@post
+                }
+
+                eventService.markVerified(eventId)
+
+                call.respond(HttpStatusCode.OK, "Event verified")
+            }
+                        
             post("/events/{id}/review") {
 
                 val principal = call.principal<JWTPrincipal>()
