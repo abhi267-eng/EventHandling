@@ -284,7 +284,26 @@ fun Application.configureRouting() {
         // Public event discovery
 
         get("/events") {
-            val events = eventService.getAllEvents()
+            val params = call.request.queryParameters
+
+            val collegeId = params["collegeId"]?.toLongOrNull()
+            val categoryId = params["categoryId"]?.toLongOrNull()
+            val city = params["city"]
+            val from = params["from"]
+            val to = params["to"]
+
+            try {
+                from?.let { java.time.LocalDate.parse(it) }
+                to?.let { java.time.LocalDate.parse(it) }
+            } catch (e: java.time.format.DateTimeParseException) {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "Dates must be in YYYY-MM-DD format"
+                )
+                return@get
+            }
+
+            val events = eventService.getAllEvents(collegeId, categoryId, city, from, to)
             call.respond(events)
         }
 
@@ -814,7 +833,7 @@ fun Application.configureRouting() {
 
                 call.respond(eventService.getEventsByCreator(userId))
             }
-            
+
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()

@@ -4,7 +4,44 @@ import java.sql.Connection
 
 class EventService(private val connection: Connection) {
 
-    fun getAllEvents(): List<Event> {
+    fun getAllEvents(
+        collegeId: Long? = null,
+        categoryId: Long? = null,
+        city: String? = null,
+        fromDate: String? = null,
+        toDate: String? = null
+    ): List<Event> {
+        val extraConditions = StringBuilder()
+        val values = mutableListOf<Any?>()
+
+        if (collegeId != null) {
+            extraConditions.append(" AND college_id = ?")
+            values.add(collegeId)
+        }
+
+        if (categoryId != null) {
+            extraConditions.append(" AND category_id = ?")
+            values.add(categoryId)
+        }
+
+        if (!city.isNullOrBlank()) {
+            extraConditions.append(
+                " AND college_id IN (SELECT college_id FROM colleges WHERE LOWER(city) = LOWER(?))"
+            )
+            values.add(city)
+        }
+
+        if (fromDate != null) {
+            extraConditions.append(" AND start_datetime >= CAST(? AS TIMESTAMP)")
+            values.add(fromDate)
+        }
+
+        if (toDate != null) {
+            extraConditions.append(
+                " AND start_datetime < CAST(? AS TIMESTAMP) + INTERVAL '1 day'"
+            )
+            values.add(toDate)
+        }
         val events = mutableListOf<Event>()
 
         val query = """
@@ -29,10 +66,12 @@ class EventService(private val connection: Connection) {
                 poster_url
             FROM events
             WHERE status = 'APPROVED'
+            $extraConditions
             ORDER BY start_datetime
         """.trimIndent()
 
         connection.prepareStatement(query).use { statement ->
+            values.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
             statement.executeQuery().use { result ->
                 while (result.next()) {
                     events.add(
