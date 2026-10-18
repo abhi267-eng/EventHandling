@@ -1075,6 +1075,146 @@ for ((action, newStatus) in listOf("suspend" to "SUSPENDED", "reactivate" to "AC
                 call.respond(eventService.getEventsByCreator(userId))
             }
 
+            post("/events/{id}/save") {
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.subject?.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@post
+                }
+
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid event ID")
+                    return@post
+                }
+
+                val event = eventService.getEventById(eventId)
+                val userCollegeId = UserService(connection).getCollegeId(userId)
+
+                if (event == null ||
+                    event.status != "APPROVED" ||
+                    (!event.acceptVisitors && event.collegeId != userCollegeId)
+                ) {
+                    call.respond(HttpStatusCode.NotFound, "Event not found")
+                    return@post
+                }
+
+                SavedEventService(connection).saveEvent(userId, eventId)
+
+                call.respond(HttpStatusCode.OK, "Event saved")
+            }
+
+            delete("/events/{id}/save") {
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.subject?.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@delete
+                }
+
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid event ID")
+                    return@delete
+                }
+
+                val removed = SavedEventService(connection).unsaveEvent(userId, eventId)
+
+                if (!removed) {
+                    call.respond(HttpStatusCode.NotFound, "This event was not in your saved list")
+                    return@delete
+                }
+
+                call.respond(HttpStatusCode.OK, "Event removed from saved events")
+            }
+
+            get("/users/me/saved") {
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.subject?.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@get
+                }
+
+                val viewerCollegeId = UserService(connection).getCollegeId(userId)
+
+                call.respond(SavedEventService(connection).getSavedEvents(userId, viewerCollegeId))
+            }
+
+                        post("/events/{id}/reviews") {
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.subject?.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@post
+                }
+
+                if (eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid event ID")
+                    return@post
+                }
+
+                val request = call.receive<ReviewRequest>()
+
+                if (request.rating !in 1..5) {
+                    call.respond(HttpStatusCode.BadRequest, "Rating must be between 1 and 5")
+                    return@post
+                }
+
+                val reviewText = request.reviewText?.trim()?.ifBlank { null }
+
+                if (reviewText != null && reviewText.length > 1000) {
+                    call.respond(HttpStatusCode.BadRequest, "Review text must be 1000 characters or fewer")
+                    return@post
+                }
+
+                val event = eventService.getEventById(eventId)
+                val userCollegeId = UserService(connection).getCollegeId(userId)
+
+                if (event == null ||
+                    event.status != "APPROVED" ||
+                    (!event.acceptVisitors && event.collegeId != userCollegeId)
+                ) {
+                    call.respond(HttpStatusCode.NotFound, "Event not found")
+                    return@post
+                }
+
+                if (event.createdBy == userId) {
+                    call.respond(HttpStatusCode.Forbidden, "You cannot review your own event")
+                    return@post
+                }
+
+                val reviewService = ReviewService(connection)
+                val reviewState = reviewService.getReviewState(eventId)
+
+                if (reviewState == "NOT_ENDED") {
+                    call.respond(HttpStatusCode.Conflict, "Reviews open after the event ends")
+                    return@post
+                }
+
+                if (reviewState != "OPEN") {
+                    call.respond(HttpStatusCode.Conflict, "The review period for this event has ended")
+                    return@post
+                }
+
+                if (!reviewService.addReview(eventId, userId, request.rating, reviewText)) {
+                    call.respond(HttpStatusCode.Conflict, "You have already reviewed this event")
+                    return@post
+                }
+
+                call.respond(HttpStatusCode.Created, "Review submitted")
+            }
+            
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()
