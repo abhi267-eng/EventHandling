@@ -316,7 +316,7 @@ fun Application.configureRouting() {
             call.respond(events)
         }
         }
-
+        authenticate("auth-jwt", optional = true) {
         get("/events/{id}") {
 
             val eventId = call.parameters["id"]?.toLongOrNull()
@@ -331,7 +331,15 @@ fun Application.configureRouting() {
 
             val event = eventService.getEventById(eventId)
 
-            if (event == null || event.status != "APPROVED") {
+            val viewerId = call.principal<JWTPrincipal>()
+                ?.payload?.subject?.toLongOrNull()
+            val viewerCollegeId = viewerId?.let { UserService(connection).getCollegeId(it) }
+
+            val hidden = event != null &&
+                !event.acceptVisitors &&
+                event.collegeId != viewerCollegeId
+
+            if (event == null || event.status != "APPROVED" || hidden) {
                 call.respondText(
                     "Event not found",
                     status = io.ktor.http.HttpStatusCode.NotFound
@@ -340,6 +348,7 @@ fun Application.configureRouting() {
             }
 
             call.respond(event)
+        }
         }
 
         // Protected event management
