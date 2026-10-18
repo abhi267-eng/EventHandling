@@ -25,6 +25,18 @@ class UserService(
         }
     }
 
+fun getRole(userId: Long): String? {
+    val sql = "SELECT role FROM users WHERE user_id = ?"
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setLong(1, userId)
+
+        statement.executeQuery().use { result ->
+            return if (result.next()) result.getString("role") else null
+        }
+    }
+}
+
 fun getCollegeId(userId: Long): Long? {
     val sql = "SELECT college_id FROM users WHERE user_id = ?"
 

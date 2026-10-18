@@ -549,6 +549,32 @@ fun patchEvent(eventId: Long, request: PatchEventRequest): Event? {
         }
     }
 }
+
+fun reviewEvent(
+    eventId: Long,
+    newStatus: String,
+    reviewerId: Long,
+    comments: String?
+): Boolean {
+    val sql = """
+        UPDATE events
+        SET status = ?,
+            reviewed_by = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            review_comments = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ? AND status = 'PENDING'
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setString(1, newStatus)
+        statement.setLong(2, reviewerId)
+        statement.setString(3, comments)
+        statement.setLong(4, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
 fun updateStatus(eventId: Long, newStatus: String): Boolean {
     val sql = """
         UPDATE events

@@ -534,6 +534,105 @@ fun Application.configureRouting() {
                     status = io.ktor.http.HttpStatusCode.OK
                 )
             }
+            
+            post("/events/{id}/review") {
+
+                val principal = call.principal<JWTPrincipal>()
+
+                if (principal == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@post
+                }
+
+                val reviewerId = principal.payload.subject.toLongOrNull()
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (reviewerId == null || eventId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid request")
+                    return@post
+                }
+
+                if (!principal.hasAnyRole(
+                        "FACULTY_COORDINATOR",
+                        "EVENT_COORDINATOR",
+                        "COLLEGE_ADMIN",
+                        "PLATFORM_ADMIN"
+                    )
+                ) {
+                    call.respond(HttpStatusCode.Forbidden, "You do not have permission to review events")
+                    return@post
+                }
+
+                val request = call.receive<EventReviewRequest>()
+
+                if (request.status != "APPROVED" && request.status != "REJECTED") {
+                    call.respond(HttpStatusCode.BadRequest, "Status must be APPROVED or REJECTED")
+                    return@post
+                }
+
+                if (request.status == "REJECTED" && request.comments.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "A reason is required when rejecting an event")
+                    return@post
+                }
+
+                val event = eventService.getEventById(eventId)
+
+                if (event == null) {
+                    call.respond(HttpStatusCode.NotFound, "Event not found")
+                    return@post
+                }
+
+                if (event.status != "PENDING") {
+                    call.respond(HttpStatusCode.Conflict, "Only pending events can be reviewed")
+                    return@post
+                }
+
+                val userService = UserService(connection)
+
+                if (!principal.hasRole("PLATFORM_ADMIN")) {
+
+                    if (event.createdBy == reviewerId) {
+                        call.respond(HttpStatusCode.Forbidden, "You cannot review your own event")
+                        return@post
+                    }
+
+                    if (userService.getCollegeId(reviewerId) != event.collegeId) {
+                        call.respond(HttpStatusCode.Forbidden, "You can only review events of your own college")
+                        return@post
+                    }
+
+                    val creatorRole = event.createdBy?.let { userService.getRole(it) }
+
+                    val allowed = when (creatorRole) {
+                        "STUDENT_ORGANIZER" -> principal.hasAnyRole(
+                            "FACULTY_COORDINATOR",
+                            "EVENT_COORDINATOR",
+                            "COLLEGE_ADMIN"
+                        )
+                        "FACULTY_COORDINATOR", "EVENT_COORDINATOR" -> principal.hasRole("COLLEGE_ADMIN")
+                        else -> false
+                    }
+
+                    if (!allowed) {
+                        call.respond(HttpStatusCode.Forbidden, "You are not authorized to review this event")
+                        return@post
+                    }
+                }
+
+                val updated = eventService.reviewEvent(
+                    eventId,
+                    request.status,
+                    reviewerId,
+                    request.comments
+                )
+
+                if (!updated) {
+                    call.respond(HttpStatusCode.Conflict, "Event could not be reviewed")
+                    return@post
+                }
+
+                call.respond(HttpStatusCode.OK, "Event ${request.status.lowercase()}")
+            }
 
             post("/events/{id}/submit") {
 
@@ -582,7 +681,7 @@ fun Application.configureRouting() {
 
                 call.respond(HttpStatusCode.OK, "Event submitted for approval")
             }
-            
+
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()
