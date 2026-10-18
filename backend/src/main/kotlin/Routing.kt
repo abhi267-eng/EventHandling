@@ -802,6 +802,19 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.OK, "Event submitted for approval")
             }
 
+            get("/users/me/events") {
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.subject?.toLongOrNull()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Authentication required")
+                    return@get
+                }
+
+                call.respond(eventService.getEventsByCreator(userId))
+            }
+            
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()

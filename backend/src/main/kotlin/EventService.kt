@@ -550,6 +550,72 @@ fun patchEvent(eventId: Long, request: PatchEventRequest): Event? {
     }
 }
 
+    fun getEventsByCreator(userId: Long): List<MyEventResponse> {
+        val events = mutableListOf<MyEventResponse>()
+
+        val query = """
+            SELECT
+                event_id,
+                title,
+                description,
+                college_id,
+                created_by,
+                category_id,
+                rules,
+                start_datetime,
+                end_datetime,
+                venue_type,
+                venue_name,
+                venue_address,
+                latitude,
+                longitude,
+                accept_visitors,
+                status,
+                verification_status,
+                poster_url,
+                review_comments
+            FROM events
+            WHERE created_by = ?
+            ORDER BY created_at DESC
+        """.trimIndent()
+
+        connection.prepareStatement(query).use { statement ->
+            statement.setLong(1, userId)
+
+            statement.executeQuery().use { result ->
+                while (result.next()) {
+                    events.add(
+                        MyEventResponse(
+                            event = Event(
+                                eventId = result.getLong("event_id"),
+                                title = result.getString("title"),
+                                description = result.getString("description"),
+                                collegeId = result.getLong("college_id"),
+                                createdBy = result.getObject("created_by")?.let { (it as Number).toLong() },
+                                categoryId = result.getObject("category_id")?.let { (it as Number).toLong() },
+                                rules = result.getString("rules"),
+                                startDatetime = result.getString("start_datetime"),
+                                endDatetime = result.getString("end_datetime"),
+                                venueType = result.getString("venue_type"),
+                                venueName = result.getString("venue_name"),
+                                venueAddress = result.getString("venue_address"),
+                                latitude = result.getObject("latitude")?.let { (it as Number).toDouble() },
+                                longitude = result.getObject("longitude")?.let { (it as Number).toDouble() },
+                                acceptVisitors = result.getBoolean("accept_visitors"),
+                                status = result.getString("status"),
+                                verificationStatus = result.getString("verification_status"),
+                                posterUrl = result.getString("poster_url")
+                            ),
+                            reviewComments = result.getString("review_comments")
+                        )
+                    )
+                }
+            }
+        }
+
+        return events
+    }
+
 fun markVerified(eventId: Long): Boolean {
     val sql = """
         UPDATE events
