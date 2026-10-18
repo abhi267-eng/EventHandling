@@ -378,6 +378,34 @@ fun Application.configureRouting() {
         }
         }
 
+        authenticate("auth-jwt", optional = true) {
+            get("/events/{id}/reviews") {
+
+                val eventId = call.parameters["id"]?.toLongOrNull()
+
+                if (eventId == null) {
+                    call.respond(io.ktor.http.HttpStatusCode.BadRequest, "Invalid event ID")
+                    return@get
+                }
+
+                val viewerId = call.principal<JWTPrincipal>()
+                    ?.payload?.subject?.toLongOrNull()
+                val viewerCollegeId = viewerId?.let { UserService(connection).getCollegeId(it) }
+
+                val event = eventService.getEventById(eventId)
+
+                if (event == null ||
+                    event.status != "APPROVED" ||
+                    (!event.acceptVisitors && event.collegeId != viewerCollegeId)
+                ) {
+                    call.respond(io.ktor.http.HttpStatusCode.NotFound, "Event not found")
+                    return@get
+                }
+
+                call.respond(ReviewService(connection).getReviews(eventId))
+            }
+        }
+        
         // Protected event management
 
         authenticate("auth-jwt") {
@@ -1214,7 +1242,7 @@ for ((action, newStatus) in listOf("suspend" to "SUSPENDED", "reactivate" to "AC
 
                 call.respond(HttpStatusCode.Created, "Review submitted")
             }
-            
+
             get("/auth/me") {
 
                 val principal = call.principal<JWTPrincipal>()
