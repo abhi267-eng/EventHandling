@@ -14,6 +14,7 @@ fun Application.configureRouting() {
     val connection = connectToPostgres(embedded = false)
     val eventService = EventService(connection)
     val adminService = AdminService(connection)
+    val adminQueueService = AdminQueueService(connection)
 
     routing {
 
@@ -317,6 +318,76 @@ fun Application.configureRouting() {
         // Protected event management
 
         authenticate("auth-jwt") {
+            get("/admin/applications/pending") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@get
+    }
+
+    val allowedRoles = setOf(
+        "PLATFORM_ADMIN",
+        "COLLEGE_ADMIN",
+        "FACULTY_COORDINATOR",
+        "EVENT_COORDINATOR"
+    )
+
+    if (actor.role !in allowedRoles) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to review applications")
+        return@get
+    }
+
+    call.respond(
+        adminQueueService.getPendingApplications(actor.role, actor.collegeId)
+    )
+}
+
+get("/admin/events/pending") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@get
+    }
+
+    val allowedRoles = setOf(
+        "PLATFORM_ADMIN",
+        "COLLEGE_ADMIN",
+        "FACULTY_COORDINATOR",
+        "EVENT_COORDINATOR"
+    )
+
+    if (actor.role !in allowedRoles) {
+        call.respond(HttpStatusCode.Forbidden, "You do not have permission to view pending events")
+        return@get
+    }
+
+    // Platform Admin may filter by college; everyone else sees only their own college
+    val collegeId = if (actor.role == "PLATFORM_ADMIN") {
+        call.request.queryParameters["collegeId"]?.toLongOrNull()
+    } else {
+        actor.collegeId
+    }
+
+    if (actor.role != "PLATFORM_ADMIN" && collegeId == null) {
+        call.respond(emptyList<PendingEvent>())
+        return@get
+    }
+
+    val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 20).coerceIn(1, 100)
+    val page = (call.request.queryParameters["page"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+
+    call.respond(
+        adminQueueService.getPendingEvents(collegeId, limit, (page - 1) * limit)
+    )
+}
             get("/admin/users") {
 
     val principal = call.principal<JWTPrincipal>()!!
