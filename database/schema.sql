@@ -416,6 +416,10 @@ CREATE TABLE events (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    reviewed_by BIGINT,
+    reviewed_at TIMESTAMP,
+    review_comments TEXT,
+
     CONSTRAINT fk_event_college
         FOREIGN KEY (college_id)
         REFERENCES colleges(college_id)
@@ -423,6 +427,11 @@ CREATE TABLE events (
 
     CONSTRAINT fk_event_creator
         FOREIGN KEY (created_by)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_event_reviewer
+        FOREIGN KEY (reviewed_by)
         REFERENCES users(user_id)
         ON DELETE SET NULL,
 

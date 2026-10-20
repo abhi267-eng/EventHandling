@@ -4,7 +4,92 @@ import java.sql.Connection
 
 class EventService(private val connection: Connection) {
 
-    fun getAllEvents(): List<Event> {
+    fun getAllEvents(
+        collegeId: Long? = null,
+        categoryId: Long? = null,
+        city: String? = null,
+        fromDate: String? = null,
+        toDate: String? = null,
+        viewerCollegeId: Long? = null,
+        search: String? = null,
+        sort: String? = null,
+        nearLat: Double? = null,
+        nearLng: Double? = null,
+        radiusKm: Double? = null
+    ): List<Event> {
+        val extraConditions = StringBuilder()
+        val values = mutableListOf<Any?>()
+
+        if (collegeId != null) {
+            extraConditions.append(" AND college_id = ?")
+            values.add(collegeId)
+        }
+
+        if (categoryId != null) {
+            extraConditions.append(" AND category_id = ?")
+            values.add(categoryId)
+        }
+
+        if (!city.isNullOrBlank()) {
+            extraConditions.append(
+                " AND college_id IN (SELECT college_id FROM colleges WHERE LOWER(city) = LOWER(?))"
+            )
+            values.add(city)
+        }
+
+        if (fromDate != null) {
+            extraConditions.append(" AND start_datetime >= CAST(? AS TIMESTAMP)")
+            values.add(fromDate)
+        }
+
+        if (toDate != null) {
+            extraConditions.append(
+                " AND start_datetime < CAST(? AS TIMESTAMP) + INTERVAL '1 day'"
+            )
+            values.add(toDate)
+        }
+                if (!search.isNullOrBlank()) {
+            extraConditions.append(" AND (title ILIKE ? OR description ILIKE ?)")
+            val pattern = "%" + search.trim() + "%"
+            values.add(pattern)
+            values.add(pattern)
+        }
+
+        if (viewerCollegeId != null) {
+            extraConditions.append(" AND (accept_visitors = TRUE OR college_id = ?)")
+            values.add(viewerCollegeId)
+        } else {
+            extraConditions.append(" AND accept_visitors = TRUE")
+        }
+        val distanceSql = """
+            (6371 * acos(LEAST(1, GREATEST(-1,
+                cos(radians(?)) * cos(radians(CAST(latitude AS DOUBLE PRECISION))) *
+                cos(radians(CAST(longitude AS DOUBLE PRECISION)) - radians(?)) +
+                sin(radians(?)) * sin(radians(CAST(latitude AS DOUBLE PRECISION)))
+            ))))
+        """.trimIndent()
+
+        if (nearLat != null && nearLng != null) {
+            extraConditions.append(
+                " AND latitude IS NOT NULL AND longitude IS NOT NULL AND $distanceSql <= ?"
+            )
+            values.add(nearLat)
+            values.add(nearLng)
+            values.add(nearLat)
+            values.add(radiusKm ?: 25.0)
+        }
+
+        val orderBy = when {
+            sort == "distance" && nearLat != null && nearLng != null -> {
+                values.add(nearLat)
+                values.add(nearLng)
+                values.add(nearLat)
+                distanceSql
+            }
+            sort == "newest" -> "created_at DESC"
+            sort == "title" -> "title ASC"
+            else -> "start_datetime"
+        }
         val events = mutableListOf<Event>()
 
         val query = """
@@ -28,10 +113,13 @@ class EventService(private val connection: Connection) {
                 verification_status,
                 poster_url
             FROM events
-            ORDER BY start_datetime
+            WHERE status = 'APPROVED'
+            $extraConditions
+            ORDER BY $orderBy
         """.trimIndent()
 
         connection.prepareStatement(query).use { statement ->
+            values.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
             statement.executeQuery().use { result ->
                 while (result.next()) {
                     events.add(
@@ -548,6 +636,128 @@ fun patchEvent(eventId: Long, request: PatchEventRequest): Event? {
         }
     }
 }
+
+    fun getEventsByCreator(userId: Long): List<MyEventResponse> {
+        val events = mutableListOf<MyEventResponse>()
+
+        val query = """
+            SELECT
+                event_id,
+                title,
+                description,
+                college_id,
+                created_by,
+                category_id,
+                rules,
+                start_datetime,
+                end_datetime,
+                venue_type,
+                venue_name,
+                venue_address,
+                latitude,
+                longitude,
+                accept_visitors,
+                status,
+                verification_status,
+                poster_url,
+                review_comments
+            FROM events
+            WHERE created_by = ?
+            ORDER BY created_at DESC
+        """.trimIndent()
+
+        connection.prepareStatement(query).use { statement ->
+            statement.setLong(1, userId)
+
+            statement.executeQuery().use { result ->
+                while (result.next()) {
+                    events.add(
+                        MyEventResponse(
+                            event = Event(
+                                eventId = result.getLong("event_id"),
+                                title = result.getString("title"),
+                                description = result.getString("description"),
+                                collegeId = result.getLong("college_id"),
+                                createdBy = result.getObject("created_by")?.let { (it as Number).toLong() },
+                                categoryId = result.getObject("category_id")?.let { (it as Number).toLong() },
+                                rules = result.getString("rules"),
+                                startDatetime = result.getString("start_datetime"),
+                                endDatetime = result.getString("end_datetime"),
+                                venueType = result.getString("venue_type"),
+                                venueName = result.getString("venue_name"),
+                                venueAddress = result.getString("venue_address"),
+                                latitude = result.getObject("latitude")?.let { (it as Number).toDouble() },
+                                longitude = result.getObject("longitude")?.let { (it as Number).toDouble() },
+                                acceptVisitors = result.getBoolean("accept_visitors"),
+                                status = result.getString("status"),
+                                verificationStatus = result.getString("verification_status"),
+                                posterUrl = result.getString("poster_url")
+                            ),
+                            reviewComments = result.getString("review_comments")
+                        )
+                    )
+                }
+            }
+        }
+
+        return events
+    }
+
+fun markVerified(eventId: Long): Boolean {
+    val sql = """
+        UPDATE events
+        SET verification_status = 'VERIFIED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ?
+          AND status = 'APPROVED'
+          AND verification_status = 'UNVERIFIED'
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setLong(1, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
+fun reviewEvent(
+    eventId: Long,
+    newStatus: String,
+    reviewerId: Long,
+    comments: String?
+): Boolean {
+    val sql = """
+        UPDATE events
+        SET status = ?,
+            reviewed_by = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            review_comments = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ? AND status = 'PENDING'
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setString(1, newStatus)
+        statement.setLong(2, reviewerId)
+        statement.setString(3, comments)
+        statement.setLong(4, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
+fun updateStatus(eventId: Long, newStatus: String): Boolean {
+    val sql = """
+        UPDATE events
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = ?
+    """.trimIndent()
+
+    connection.prepareStatement(sql).use { statement ->
+        statement.setString(1, newStatus)
+        statement.setLong(2, eventId)
+        return statement.executeUpdate() > 0
+    }
+}
+
 fun deleteEvent(eventId: Long): Boolean {
 
     val query = """
