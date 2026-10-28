@@ -21,6 +21,7 @@ dependencies {
     implementation(ktorLibs.server.contentNegotiation)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.cors)
+    implementation(ktorLibs.server.statusPages)
     implementation(ktorLibs.server.netty)
     implementation(ktorLibs.server.auth)
     implementation(ktorLibs.server.auth.jwt)
@@ -30,7 +31,12 @@ dependencies {
     implementation(libs.postgresql)
     implementation(libs.bcrypt)
     implementation(libs.java.jwt)
+    implementation(libs.angus.mail)
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
