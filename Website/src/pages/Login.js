@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { loginUser } from "../api";
+import { defaultRouteFor } from "../auth";
 import "../global.css";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +32,9 @@ function Login() {
       setMessage("Login successful!");
       setSuccess(true);
 
-      navigate("/home");
+      navigate(location.state?.from?.pathname || defaultRouteFor(data.user?.role), {
+        replace: true,
+      });
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -44,7 +48,7 @@ function Login() {
 
       <main className="auth-card">
         <div className="auth-brand">
-          <h1>EventHandling</h1>
+          <h1>EventBook</h1>
           <p>Discover. Create. Connect.</p>
         </div>
 
@@ -92,17 +96,13 @@ function Login() {
             </div>
           )}
 
-          <button
-            className="auth-button"
-            type="submit"
-            disabled={loading}
-          >
+          <button className="auth-button" type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
         <div className="auth-footer">
-          New to EventHandling?{" "}
+          New to EventBook?{" "}
           <Link className="auth-link" to="/signup">
             New Registration
           </Link>
