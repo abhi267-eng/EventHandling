@@ -26,3 +26,10 @@ data class OrganizationLookup(
     val organizationName: String,
     val organizationType: String
 )
+
+@Serializable
+data class CategoryLookup(
+    val categoryId: Long,
+    val categoryName: String,
+    val description: String?
+)

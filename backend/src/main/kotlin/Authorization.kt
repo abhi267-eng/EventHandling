@@ -51,3 +51,9 @@ fun canManage(actor: User, target: User): Boolean {
         else -> false
     }
 }
+
+fun canManageCollege(actor: User, collegeId: Long): Boolean = when (actor.role) {
+    "PLATFORM_ADMIN" -> true
+    "COLLEGE_ADMIN" -> actor.collegeId != null && actor.collegeId == collegeId
+    else -> false
+}
