@@ -1,5 +1,6 @@
 package com.eventhandling
 
+import java.sql.SQLException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -15,6 +16,7 @@ fun Application.configureRouting() {
     val eventService = EventService(connection)
     val adminService = AdminService(connection)
     val adminQueueService = AdminQueueService(connection)
+    val collegeManagementService = CollegeManagementService(connection)
 
     routing {
 
@@ -282,6 +284,14 @@ fun Application.configureRouting() {
                 collegeLookupService.getOrganizations(collegeId)
 
             call.respond(organizations)
+        }
+
+        get("/categories") {
+
+            val categories =
+                EventCategoryService(connection).getAllCategories()
+
+            call.respond(categories)
         }
         // Public event discovery
 
@@ -605,6 +615,190 @@ for ((action, newStatus) in listOf("suspend" to "SUSPENDED", "reactivate" to "AC
     }
 }
 
+post("/colleges/{id}/departments") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+    val collegeId = call.parameters["id"]?.toLongOrNull()
+
+    if (collegeId == null) {
+        call.respond(HttpStatusCode.BadRequest, "Invalid college ID")
+        return@post
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@post
+    }
+
+    if (!canManageCollege(actor, collegeId)) {
+        call.respond(HttpStatusCode.Forbidden, "You cannot manage departments of this college")
+        return@post
+    }
+
+    val request = call.receive<CreateDepartmentRequest>()
+    val name = request.departmentName.trim()
+    val code = request.departmentCode?.trim()?.ifBlank { null }
+
+    if (name.isEmpty() || name.length > 100) {
+        call.respond(HttpStatusCode.BadRequest, "Department name is required (max 100 characters)")
+        return@post
+    }
+
+    if (code != null && code.length > 20) {
+        call.respond(HttpStatusCode.BadRequest, "Department code must be 20 characters or fewer")
+        return@post
+    }
+
+    try {
+        call.respond(
+            HttpStatusCode.Created,
+            collegeManagementService.addDepartment(collegeId, name, code)
+        )
+    } catch (e: SQLException) {
+        when (e.sqlState) {
+            "23505" -> call.respond(HttpStatusCode.Conflict, "This department already exists in the college")
+            "23503" -> call.respond(HttpStatusCode.NotFound, "College not found")
+            else -> throw e
+        }
+    }
+}
+
+delete("/departments/{id}") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+    val departmentId = call.parameters["id"]?.toLongOrNull()
+
+    if (departmentId == null) {
+        call.respond(HttpStatusCode.BadRequest, "Invalid department ID")
+        return@delete
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@delete
+    }
+
+    val collegeId = collegeManagementService.getDepartmentCollegeId(departmentId)
+
+    if (collegeId == null) {
+        call.respond(HttpStatusCode.NotFound, "Department not found")
+        return@delete
+    }
+
+    if (!canManageCollege(actor, collegeId)) {
+        call.respond(HttpStatusCode.Forbidden, "You cannot manage departments of this college")
+        return@delete
+    }
+
+    try {
+        collegeManagementService.deleteDepartment(departmentId)
+        call.respondText("Department deleted successfully")
+    } catch (e: SQLException) {
+        if (e.sqlState == "23503") {
+            call.respond(
+                HttpStatusCode.Conflict,
+                "This department is still used by users or applications and cannot be deleted"
+            )
+        } else throw e
+    }
+}
+
+post("/colleges/{id}/organizations") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+    val collegeId = call.parameters["id"]?.toLongOrNull()
+
+    if (collegeId == null) {
+        call.respond(HttpStatusCode.BadRequest, "Invalid college ID")
+        return@post
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@post
+    }
+
+    if (!canManageCollege(actor, collegeId)) {
+        call.respond(HttpStatusCode.Forbidden, "You cannot manage organizations of this college")
+        return@post
+    }
+
+    val request = call.receive<CreateOrganizationRequest>()
+    val name = request.organizationName.trim()
+    val type = request.organizationType.trim().uppercase()
+
+    if (name.isEmpty() || name.length > 100) {
+        call.respond(HttpStatusCode.BadRequest, "Organization name is required (max 100 characters)")
+        return@post
+    }
+
+    if (type.isEmpty()) {
+        call.respond(HttpStatusCode.BadRequest, "Organization type is required")
+        return@post
+    }
+
+    try {
+        call.respond(
+            HttpStatusCode.Created,
+            collegeManagementService.addOrganization(collegeId, name, type)
+        )
+    } catch (e: SQLException) {
+        when (e.sqlState) {
+            "23505" -> call.respond(HttpStatusCode.Conflict, "This organization already exists in the college")
+            "23503" -> call.respond(HttpStatusCode.NotFound, "College not found")
+            "23514" -> call.respond(HttpStatusCode.BadRequest, "Invalid organization type")
+            else -> throw e
+        }
+    }
+}
+
+delete("/organizations/{id}") {
+
+    val principal = call.principal<JWTPrincipal>()!!
+    val organizationId = call.parameters["id"]?.toLongOrNull()
+
+    if (organizationId == null) {
+        call.respond(HttpStatusCode.BadRequest, "Invalid organization ID")
+        return@delete
+    }
+
+    val actor = adminService.getUserById(principal.payload.subject.toLong())
+
+    if (actor == null) {
+        call.respond(HttpStatusCode.Unauthorized, "Invalid authentication token")
+        return@delete
+    }
+
+    val collegeId = collegeManagementService.getOrganizationCollegeId(organizationId)
+
+    if (collegeId == null) {
+        call.respond(HttpStatusCode.NotFound, "Organization not found")
+        return@delete
+    }
+
+    if (!canManageCollege(actor, collegeId)) {
+        call.respond(HttpStatusCode.Forbidden, "You cannot manage organizations of this college")
+        return@delete
+    }
+
+    try {
+        collegeManagementService.deleteOrganization(organizationId)
+        call.respondText("Organization deleted successfully")
+    } catch (e: SQLException) {
+        if (e.sqlState == "23503") {
+            call.respond(
+                HttpStatusCode.Conflict,
+                "This organization is still used by users or applications and cannot be deleted"
+            )
+        } else throw e
+    }
+}
             post("/events") {
 
                 val principal = call.principal<JWTPrincipal>()

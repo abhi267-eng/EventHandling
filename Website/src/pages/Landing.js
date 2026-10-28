@@ -126,7 +126,7 @@ function Landing() {
         {/* About */}
         <section className="landing-section" id="about">
           <div className="section-heading">
-            <p font>ABOUT EVENTBOOK</p>
+            <p>ABOUT EVENTBOOK</p>
 
             <h2>One place for every college event</h2>
 
