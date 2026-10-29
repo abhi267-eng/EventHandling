@@ -184,7 +184,53 @@ fun Application.configureRouting() {
                 "Email verified successfully"
             )
         }
+        post("/auth/resend-otp") {
 
+            val request = call.receive<ResendOtpRequest>()
+
+            val verificationService = EmailVerificationService(connection)
+
+            val email = verificationService.getUnverifiedEmail(request.userId)
+
+            if (email == null) {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "User not found or email already verified"
+                )
+                return@post
+            }
+
+            val waitSeconds = verificationService.secondsUntilResendAllowed(request.userId)
+
+            if (waitSeconds > 0) {
+                call.response.headers.append(
+                    io.ktor.http.HttpHeaders.RetryAfter,
+                    waitSeconds.toString()
+                )
+                call.respond(
+                    io.ktor.http.HttpStatusCode.TooManyRequests,
+                    "Please wait $waitSeconds seconds before requesting another code"
+                )
+                return@post
+            }
+
+            if (verificationService.codesSentLast24Hours(request.userId) >=
+                EmailVerificationService.MAX_CODES_PER_DAY
+            ) {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.TooManyRequests,
+                    "Daily limit of verification codes reached. Try again tomorrow"
+                )
+                return@post
+            }
+
+            verificationService.sendCode(request.userId, email)
+
+            call.respond(
+                io.ktor.http.HttpStatusCode.OK,
+                "A new verification code has been sent"
+            )
+        }
         post("/setup/platform-admin") {
 
             val setupSecret =
