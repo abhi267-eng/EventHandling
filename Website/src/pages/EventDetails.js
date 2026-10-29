@@ -15,12 +15,11 @@ import { formatDateTime } from "../components/EventCard";
 import StarRating from "../components/StarRating";
 import PageState from "../components/PageState";
 import { useToast } from "../components/Feedback";
-// inside the component:
-const toast = useToast();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function EventDetails() {
+  const toast = useToast();
   const { id } = useParams();
   const loggedIn = isLoggedIn();
 
@@ -98,7 +97,7 @@ function EventDetails() {
       saved ? await unsaveEvent(id) : await saveEvent(id);
       setSaved(!saved);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   }
 

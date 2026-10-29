@@ -4,9 +4,8 @@ import { getMyEvents, submitEvent, deleteEvent } from "../api";
 import { formatDateTime } from "../components/EventCard";
 import StatusBadge from "../components/StatusBadge";
 import PageState from "../components/PageState";
-import { useToast } from "../components/Feedback";
+import { useToast, useConfirm } from "../components/Feedback";
 // inside the component:
-const toast = useToast();
 
 const TABS = [
   { key: "all", label: "All" },
@@ -18,6 +17,7 @@ const TABS = [
 
 // Collapse the backend's status + verificationStatus into one bucket
 function bucketOf(event) {
+  
   const s = (event.status || "").toLowerCase();
   const v = (event.verificationStatus || "").toLowerCase();
   if (v === "rejected" || s === "rejected") return "rejected";
@@ -28,6 +28,8 @@ function bucketOf(event) {
 }
 
 function MyEvents() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [tab, setTab] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -54,20 +56,26 @@ function MyEvents() {
       await submitEvent(id);
       await load();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setBusyId(null);
     }
   }
 
   async function handleDelete(id, title) {
-    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
-    setBusyId(id);
+    const ok = await confirm({
+        title: "Delete event?",
+        message: `"${title}" will be permanently deleted. This cannot be undone.`,
+        confirmText: "Delete",
+        danger: true,
+        });
+        if (!ok) return;
+        setBusyId(id);
     try {
       await deleteEvent(id);
       setItems((prev) => prev.filter((i) => i.event.eventId !== id));
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setBusyId(null);
     }

@@ -9,10 +9,10 @@ import {
 import { formatRole } from "../auth";
 import PageState from "../components/PageState";
 import { useToast } from "../components/Feedback";
-// inside the component:
-const toast = useToast();
+
 
 function Applications() {
+  const toast = useToast();
   const [apps, setApps] = useState([]);
   const [colleges, setColleges] = useState({});
   const [departments, setDepartments] = useState({});
@@ -59,7 +59,7 @@ function Applications() {
   async function decide(app, status) {
     const text = (comments[app.applicationId] || "").trim();
     if (status === "REJECTED" && !text) {
-      alert("Please add a comment explaining the rejection.");
+      toast.error("Please add a comment explaining the rejection.");
       return;
     }
     setBusyId(app.applicationId);
@@ -71,7 +71,7 @@ function Applications() {
       });
       setApps((prev) => prev.filter((a) => a.applicationId !== app.applicationId));
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setBusyId(null);
     }

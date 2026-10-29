@@ -5,9 +5,9 @@ import EventCard from "../components/EventCard";
 import PageState from "../components/PageState";
 import { useToast } from "../components/Feedback";
 // inside the component:
-const toast = useToast();
 
 function SavedEvents() {
+  const toast = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -24,7 +24,7 @@ function SavedEvents() {
       await unsaveEvent(eventId);
       setEvents((prev) => prev.filter((e) => e.eventId !== eventId));
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   }
 
