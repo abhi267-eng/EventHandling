@@ -4,9 +4,9 @@ import { formatDateTime } from "../components/EventCard";
 import PageState from "../components/PageState";
 import { useToast } from "../components/Feedback";
 // inside the component:
-const toast = useToast();
 
 function ReviewEvents() {
+  const toast = useToast();
   const [events, setEvents] = useState([]);
   const [categories, setCategories] = useState({});
   const [colleges, setColleges] = useState({});

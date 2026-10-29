@@ -11,10 +11,9 @@ import { isLoggedIn } from "../auth";
 import EventCard from "../components/EventCard";
 import PageState from "../components/PageState";
 import { useToast } from "../components/Feedback";
-// inside the component:
-const toast = useToast();
 
 function EventList() {
+  const toast = useToast();
   const [events, setEvents] = useState([]);
   const [categories, setCategories] = useState([]);
   const [colleges, setColleges] = useState([]);
@@ -108,7 +107,7 @@ function EventList() {
         wasSaved ? next.add(eventId) : next.delete(eventId);
         return next;
       });
-      alert(err.message);
+      toast.error(err.message);
     }
   }
 
